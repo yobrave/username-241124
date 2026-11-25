@@ -1,31 +1,38 @@
-"""Entrant's own make.fun handle, shipped as the whole entry.
-
-The handle is the payload. The program stamps it into the output
-folder, hashes both sides of the trip, and refuses to bow if the
-digests disagree.
-"""
-import hashlib
+import json
 import os
 
-HANDLE = "yobrave-lee"
-STAMP_NO = "rr-1125-02"
+TAG_USR = "usr3-handle"
+WIDTH = 30
 
 
-def ship(base):
-    base = base or "output"
-    os.makedirs(base, exist_ok=True)
-    p = os.path.join(base, "entry.txt")
-    payload = HANDLE + "\n"
-    with open(p, "w", encoding="utf-8", newline="\n") as f:
-        f.write(payload)
-    with open(p, "rb") as f:
-        blob = f.read()
-    want = hashlib.sha256(payload.encode("utf-8")).hexdigest()
-    have = hashlib.sha256(blob).hexdigest()
-    assert want == have, "handle checksum drifted"
-    return blob.decode("utf-8").strip()
+def handle(raw_bytes):
+    for row in raw_bytes.splitlines():
+        if row.strip():
+            return row.strip().decode("utf-8")
+    return ""
 
 
-got = ship(os.environ.get("MAKEFUN_OUTPUT_DIR"))
-assert got == HANDLE
-print("handle shipped:", got, "| stamp:", STAMP_NO)
+def check_handle(name):
+    return bool(name) and name == name.strip() and len(name) <= WIDTH
+
+
+def sign_in(name, root):
+    gate = os.environ.get("MAKEFUN_OUTPUT_DIR") or os.path.join(root, "output")
+    os.makedirs(gate, exist_ok=True)
+    badge = os.path.join(gate, "entry.txt")
+    ink = name.encode("utf-8")
+    with open(badge, "wb") as engraver:
+        engraver.write(ink)
+    if open(badge, "rb").read() != ink:
+        raise RuntimeError("badge misprinted")
+    return badge
+
+
+root = os.path.dirname(os.path.abspath(__file__))
+name = handle(open(os.path.join(root, "entry.txt"), "rb").read())
+
+if not check_handle(name):
+    print(json.dumps({"handle": "anonymous", "size": len(name)}))
+    raise SystemExit(1)
+badge = sign_in(name, root)
+print(json.dumps({"handle": name, "size": len(name), "width": WIDTH, "tag": TAG_USR, "badge": os.path.basename(badge)}))
